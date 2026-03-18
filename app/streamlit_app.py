@@ -18,6 +18,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
 
+from src.generate_data import generate_all
 from src.features import get_modeling_dataset, build_account_features
 from src.model import train_logistic_regression, get_feature_importance
 from src.buying_groups import (
@@ -41,12 +42,14 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 @st.cache_data
 def load_data():
-    data_dir = Path(__file__).parent.parent / "data"
+    # Generate data in-memory (works both locally and on Streamlit Cloud
+    # where the gitignored CSVs don't exist)
+    tables = generate_all()
     return {
-        "accounts": pd.read_csv(data_dir / "accounts.csv"),
-        "contacts": pd.read_csv(data_dir / "contacts.csv"),
-        "opportunities": pd.read_csv(data_dir / "opportunities.csv"),
-        "contact_opp": pd.read_csv(data_dir / "contact_opportunity.csv"),
+        "accounts": tables["accounts"],
+        "contacts": tables["contacts"],
+        "opportunities": tables["opportunities"],
+        "contact_opp": tables["contact_opportunity"],
     }
 
 
