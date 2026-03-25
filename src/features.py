@@ -58,22 +58,42 @@ def build_account_features(
     contacts: pd.DataFrame,
     opportunities: pd.DataFrame,
     contact_opportunity: pd.DataFrame,
+    include_deal_features: bool = True,
 ) -> pd.DataFrame:
     """
     Build account-level feature matrix for propensity scoring.
 
-    Combines firmographic data, technographic signals, contact composition,
-    and buying group characteristics.
+    Combines firmographic data, technographic signals, and contact composition.
+    Optionally includes in-deal buying group features from the contact_opportunity
+    bridge table.
+
+    Args:
+        include_deal_features: If True (default), include in-deal buying group
+            features derived from the contact_opportunity bridge. Set to False
+            for propensity modeling to avoid target leakage — those features are
+            computed from the same opportunities whose outcome is the target.
+
+    Feature groups:
+        Pre-deal (always included):
+            - Firmographic/technographic: segment, size, tech stack, region
+            - Contact composition: counts, seniority, function diversity
+              (from the contacts table, independent of deal outcomes)
+        In-deal (include_deal_features=True only):
+            - Buying group signals: deal contact count, role coverage,
+              completeness score (from the contact_opportunity bridge)
     """
     df = _build_account_firmographic(accounts)
 
-    # --- Contact composition features ---
+    # --- Pre-deal: Contact composition features (from contacts table) ---
     contact_agg = _build_contact_composition(contacts)
     df = df.merge(contact_agg, on="account_id", how="left")
 
-    # --- Buying group features from deal history ---
-    bg_features = _build_deal_contact_features(opportunities, contact_opportunity, contacts)
-    df = df.merge(bg_features, on="account_id", how="left")
+    # --- In-deal: Buying group features from deal history ---
+    if include_deal_features:
+        bg_features = _build_in_deal_contact_features(
+            opportunities, contact_opportunity, contacts
+        )
+        df = df.merge(bg_features, on="account_id", how="left")
 
     # Fill NaN for accounts with no opportunities
     fill_cols = [c for c in df.columns if c not in ["account_id"]]
@@ -144,12 +164,20 @@ def _build_contact_composition(contacts: pd.DataFrame) -> pd.DataFrame:
     return agg
 
 
-def _build_deal_contact_features(
+def _build_in_deal_contact_features(
     opportunities: pd.DataFrame,
     contact_opportunity: pd.DataFrame,
     contacts: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Build features from deal contact roles (buying group signals)."""
+    """
+    Build in-deal features from contact-opportunity role assignments.
+
+    WARNING: These features are derived from the same opportunity records whose
+    outcome is the target variable. Including them in a propensity model creates
+    target leakage. Use build_account_features(include_deal_features=False) for
+    propensity modeling. These features are still useful for buying group analysis
+    and descriptive reporting.
+    """
     if len(contact_opportunity) == 0 or len(opportunities) == 0:
         return pd.DataFrame(columns=["account_id"])
 
@@ -205,9 +233,10 @@ def get_modeling_dataset(
         X: Feature matrix (account-level)
         y: Binary target (1 = won, 0 = lost)
     """
-    # Build account features
+    # Build account features (exclude in-deal features to avoid target leakage)
     account_features = build_account_features(
-        accounts, contacts, opportunities, contact_opportunity
+        accounts, contacts, opportunities, contact_opportunity,
+        include_deal_features=False,
     )
 
     # Get target: for accounts with closed deals, did they win?

@@ -9,6 +9,7 @@ from src.model import (
     train_random_forest,
     evaluate_model,
     get_feature_importance,
+    bootstrap_ci,
 )
 
 
@@ -72,6 +73,39 @@ class TestEvaluation:
         lift = eval_result["metrics"]["lift_by_decile"]
         assert isinstance(lift, pd.DataFrame)
         assert "lift" in lift.columns
+
+
+class TestBootstrapCI:
+    def test_returns_point_and_bounds(self):
+        y_true = np.array([0, 0, 1, 1, 0, 1, 0, 1, 1, 0] * 10)
+        y_scores = np.array([0.2, 0.3, 0.8, 0.7, 0.4, 0.6, 0.1, 0.9, 0.5, 0.35] * 10)
+        from sklearn.metrics import roc_auc_score
+        result = bootstrap_ci(y_true, y_scores, roc_auc_score, n_bootstrap=200)
+        assert "point" in result
+        assert "lower" in result
+        assert "upper" in result
+        assert result["lower"] <= result["point"] <= result["upper"]
+
+    def test_ci_bounds_reasonable(self):
+        y_true = np.array([0, 0, 1, 1, 0, 1, 0, 1, 1, 0] * 10)
+        y_scores = np.array([0.2, 0.3, 0.8, 0.7, 0.4, 0.6, 0.1, 0.9, 0.5, 0.35] * 10)
+        from sklearn.metrics import roc_auc_score
+        result = bootstrap_ci(y_true, y_scores, roc_auc_score, n_bootstrap=500)
+        assert 0.0 <= result["lower"] <= 1.0
+        assert 0.0 <= result["upper"] <= 1.0
+
+
+class TestEvaluationCI:
+    def test_auc_ci_in_metrics(self, modeling_data):
+        X, y = modeling_data
+        if len(y.unique()) < 2:
+            pytest.skip("Need both classes in target")
+        result = train_logistic_regression(X, y, cv=2)
+        eval_result = evaluate_model(result["model"], X, y)
+        assert "auc_ci_lower" in eval_result["metrics"]
+        assert "auc_ci_upper" in eval_result["metrics"]
+        assert eval_result["metrics"]["auc_ci_lower"] <= eval_result["metrics"]["auc"]
+        assert eval_result["metrics"]["auc_ci_upper"] >= eval_result["metrics"]["auc"]
 
 
 class TestFeatureImportance:

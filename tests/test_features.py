@@ -77,6 +77,28 @@ class TestAccountFeatures:
         assert "high_signal_tool_count" in result.columns
         assert "has_salesforce" in result.columns
 
+    def test_include_deal_features_true(self, sample_accounts, sample_contacts, sample_opps, sample_bridge):
+        result = build_account_features(
+            sample_accounts, sample_contacts, sample_opps, sample_bridge,
+            include_deal_features=True,
+        )
+        # In-deal features should be present
+        assert "deal_contact_count" in result.columns
+        assert "buying_group_completeness" in result.columns
+
+    def test_exclude_deal_features(self, sample_accounts, sample_contacts, sample_opps, sample_bridge):
+        result = build_account_features(
+            sample_accounts, sample_contacts, sample_opps, sample_bridge,
+            include_deal_features=False,
+        )
+        # In-deal features should NOT be present
+        assert "deal_contact_count" not in result.columns
+        assert "buying_group_completeness" not in result.columns
+        assert "has_champion" not in result.columns
+        # Pre-deal features should still be present
+        assert "contact_count" in result.columns
+        assert "tech_stack_count" in result.columns
+
 
 class TestModelingDataset:
     def test_returns_X_y(self, sample_accounts, sample_contacts, sample_opps, sample_bridge):

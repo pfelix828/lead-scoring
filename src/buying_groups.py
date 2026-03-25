@@ -225,6 +225,12 @@ def estimate_enrichment_pipeline(
     Estimate the pipeline value of enriching gap accounts.
 
     Assumes that filling coverage gaps would increase win rate by win_rate_uplift.
+
+    NOTE: The default assumptions (2% of annual revenue as deal size, 10% win rate
+    uplift from enrichment) are illustrative defaults for framework demonstration.
+    In production, these would need calibration against real historical conversion
+    data — actual deal-to-revenue ratios and enrichment uplift vary significantly
+    by segment, industry, and sales motion.
     """
     if len(gaps_df) == 0:
         return gaps_df

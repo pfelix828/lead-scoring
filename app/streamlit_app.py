@@ -67,8 +67,10 @@ def build_scored_dataset(_data):
     )
     lr = train_logistic_regression(X_train, y_train, cv=5)
 
-    # Score all accounts
+    # Score all accounts and track train/test membership
     scores = lr["model"].predict_proba(X)[:, 1]
+    in_test_set = pd.Series(False, index=X.index)
+    in_test_set.loc[X_test.index] = True
 
     # Rebuild with account IDs
     acct_feat = build_account_features(accounts, contacts, opportunities, contact_opp)
@@ -77,6 +79,7 @@ def build_scored_dataset(_data):
     acct_target.columns = ["account_id", "target"]
     dataset = acct_feat.merge(acct_target, on="account_id", how="inner")
     dataset["propensity_score"] = scores
+    dataset["in_test_set"] = in_test_set.values
 
     # Buying group completeness
     completeness = score_buying_group_completeness(
@@ -84,7 +87,7 @@ def build_scored_dataset(_data):
     )
 
     # Merge everything
-    result = dataset[["account_id", "propensity_score", "target"]].merge(
+    result = dataset[["account_id", "propensity_score", "target", "in_test_set"]].merge(
         completeness, on="account_id", how="inner"
     ).merge(
         accounts[["account_id", "company_name", "segment", "industry",
@@ -138,6 +141,12 @@ completeness_range = st.sidebar.slider(
     value=(0, 100),
     step=5,
 )
+test_set_only = st.sidebar.checkbox(
+    "Test set accounts only (out-of-sample)",
+    value=True,
+    help="When checked, shows only accounts the model did NOT train on. "
+         "Uncheck to include all accounts (training + test).",
+)
 
 # Apply filters
 filtered = scored[
@@ -146,6 +155,8 @@ filtered = scored[
     & (scored["propensity_score"].between(*score_range))
     & (scored["completeness_score"].between(*completeness_range))
 ]
+if test_set_only:
+    filtered = filtered[filtered["in_test_set"]]
 
 # ---------------------------------------------------------------------------
 # Header

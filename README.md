@@ -17,11 +17,11 @@ This project builds both layers and combines them into a targeting framework tha
 
 | Metric | Value |
 |--------|-------|
-| Test AUC | 0.608 |
-| Precision @ Top 10% | 54.5% (vs. 36% baseline) |
+| Test AUC | 0.608 (95% CI: 0.54–0.67) |
+| Precision @ Top 10% | 54.5% (95% CI: 0.36–0.73) |
 | Top-Decile Lift | 1.4x |
 
-The model uses 49 features across three layers — firmographic/technographic signals, contact composition metrics, and buying group characteristics. Top drivers include VP+ engagement on deals, complementary tech stack, and buying group completeness.
+The model uses pre-deal features — firmographic/technographic signals and contact composition metrics. In-deal buying group features (from the contact-opportunity bridge) are excluded from the propensity model to avoid target leakage, since they are derived from the same opportunities whose outcome is the target. Top drivers include complementary tech stack, existing customer status, and senior contact density.
 
 ### Buying Group Analysis
 
@@ -32,7 +32,11 @@ The model uses 49 features across three layers — firmographic/technographic si
 | Medium (25-50) | 27% | 170 |
 | Low (0-25) | 24% | 87 |
 
-Accounts with complete buying groups win at **2x the rate** of those with low completeness. The gap analysis identified 464 accounts with specific coverage gaps (missing roles, seniority, or function diversity) and estimated **$286M in addressable pipeline** from enrichment.
+Accounts with complete buying groups win at **2x the rate** of those with low completeness. The gap analysis identified 464 accounts with specific coverage gaps (missing roles, seniority, or function diversity). The enrichment framework identifies **$286M in addressable pipeline** under illustrative assumptions (2% deal-to-revenue ratio, 10% win rate uplift from enrichment) — actual values would require calibration against historical conversion data.
+
+### Synthetic Data Limitations
+
+The synthetic data generator explicitly encodes signals (VP+ contacts increase win probability, complementary tech stacks correlate with conversion, etc.) that the model then recovers. This means the results above are a **design validation** — confirming the model correctly recovers planted signals — not empirical discovery of real-world patterns. With real CRM data, signals would be noisier, confounders (sales rep quality, deal timing, competitive pressure) would exist, and temporal dynamics would matter. The model architecture and evaluation framework transfer directly to production; the specific coefficients and lift numbers do not.
 
 ## Project Structure
 

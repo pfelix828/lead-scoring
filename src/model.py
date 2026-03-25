@@ -78,6 +78,47 @@ def train_random_forest(X_train, y_train, cv: int = 5) -> dict:
     }
 
 
+def bootstrap_ci(y_true, y_scores, metric_fn, n_bootstrap=1000, ci=0.95):
+    """
+    Compute bootstrap confidence intervals for a metric.
+
+    Args:
+        y_true: True labels (array-like)
+        y_scores: Predicted scores (array-like)
+        metric_fn: Callable(y_true, y_scores) -> float
+        n_bootstrap: Number of bootstrap samples
+        ci: Confidence level (default 0.95)
+
+    Returns:
+        dict with keys 'point', 'lower', 'upper'
+    """
+    rng = np.random.default_rng(42)
+    y_true = np.asarray(y_true)
+    y_scores = np.asarray(y_scores)
+    n = len(y_true)
+
+    point = metric_fn(y_true, y_scores)
+
+    boot_values = []
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        y_t = y_true[idx]
+        y_s = y_scores[idx]
+        # Skip if only one class in bootstrap sample
+        if len(np.unique(y_t)) < 2:
+            continue
+        boot_values.append(metric_fn(y_t, y_s))
+
+    if len(boot_values) == 0:
+        return {"point": point, "lower": point, "upper": point}
+
+    alpha = (1 - ci) / 2
+    lower = np.percentile(boot_values, alpha * 100)
+    upper = np.percentile(boot_values, (1 - alpha) * 100)
+
+    return {"point": point, "lower": lower, "upper": upper}
+
+
 def evaluate_model(model, X_test, y_test, amounts=None) -> dict:
     """
     Evaluate a trained model with both ML and business metrics.
@@ -93,19 +134,30 @@ def evaluate_model(model, X_test, y_test, amounts=None) -> dict:
     y_pred_proba = model.predict_proba(X_test)[:, 1]
     y_pred = model.predict(X_test)
 
+    auc_ci = bootstrap_ci(y_test, y_pred_proba, roc_auc_score)
+
     metrics = {
-        "auc": roc_auc_score(y_test, y_pred_proba),
+        "auc": auc_ci["point"],
+        "auc_ci_lower": auc_ci["lower"],
+        "auc_ci_upper": auc_ci["upper"],
         "log_loss": log_loss(y_test, y_pred_proba),
     }
 
     # Lift by decile
     metrics["lift_by_decile"] = _compute_lift_by_decile(y_test, y_pred_proba)
 
-    # Precision at K
+    # Precision at K with bootstrap CIs
     for k_pct in [10, 20, 30]:
-        metrics[f"precision_at_{k_pct}pct"] = _precision_at_k(
-            y_test, y_pred_proba, k_pct / 100
-        )
+        prec = _precision_at_k(y_test, y_pred_proba, k_pct / 100)
+        metrics[f"precision_at_{k_pct}pct"] = prec
+
+    # Bootstrap CI for precision@10%
+    def _prec_at_10(y_t, y_s):
+        return _precision_at_k(pd.Series(y_t), y_s, 0.10)
+
+    p10_ci = bootstrap_ci(y_test, y_pred_proba, _prec_at_10)
+    metrics["precision_at_10pct_ci_lower"] = p10_ci["lower"]
+    metrics["precision_at_10pct_ci_upper"] = p10_ci["upper"]
 
     # Revenue capture (if amounts provided)
     if amounts is not None:
