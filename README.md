@@ -4,7 +4,7 @@ A propensity model and buying group framework for B2B SaaS marketing, built on s
 
 ## The Problem
 
-In B2B SaaS, marketing teams target thousands of accounts but only a fraction will close. The challenge is twofold:
+In B2B SaaS, marketing teams target tens of thousands of accounts but only a fraction will close. The challenge is twofold:
 
 1. **Which accounts are most likely to buy?** — Propensity scoring ranks accounts by conversion likelihood so marketing can allocate resources efficiently.
 2. **What's preventing accounts from closing?** — Buying group analysis identifies *who's missing* at each account (roles, seniority, functions) and recommends specific enrichment actions.
@@ -56,8 +56,8 @@ lead-scoring/
 │   ├── 02_feature_engineering # Feature derivation walkthrough + correlation analysis
 │   ├── 03_modeling            # Train, evaluate, compare LR vs RF, business metrics
 │   └── 04_buying_groups       # Completeness scoring, gap analysis, enrichment targets
-├── tests/                     # 56 pytest tests
-└── app/                       # Streamlit dashboard (TBD)
+├── tests/                     # 61 pytest tests
+└── app/                       # Streamlit dashboard
 ```
 
 ## How to Run
