@@ -7,7 +7,8 @@ Generates four tables mirroring a real CRM + marketing automation stack:
 - opportunities: sales deals
 - contact_opportunity: bridge table linking contacts to deals with roles
 
-Signals are baked in at realistic strength to produce AUC ~0.75-0.80.
+Signals are baked in at moderate strength. The propensity model (using pre-deal
+features only, to avoid target leakage) recovers these at AUC ~0.60-0.65.
 """
 
 import numpy as np
@@ -129,7 +130,7 @@ LAST_NAMES = [
 OPP_STAGES = ["Discovery", "Evaluation", "Proposal", "Negotiation", "Closed Won", "Closed Lost"]
 
 
-def generate_accounts(n: int = 1500, rng: np.random.Generator = None) -> pd.DataFrame:
+def generate_accounts(n: int = 100_000, rng: np.random.Generator = None) -> pd.DataFrame:
     """Generate synthetic account (company) data with firmographic and technographic fields."""
     if rng is None:
         rng = np.random.default_rng(RANDOM_SEED)
@@ -151,14 +152,13 @@ def generate_accounts(n: int = 1500, rng: np.random.Generator = None) -> pd.Data
     rev_per_emp = rng.uniform(80_000, 350_000, size=n)
     annual_revenue = (employee_count * rev_per_emp).astype(int)
 
-    # Tech stack: more tools for larger companies
-    def pick_tech_stack(emp_count):
-        base = 2 + int(np.log2(max(emp_count, 20)))
-        n_tools = min(rng.poisson(base), len(TECH_TOOLS))
-        n_tools = max(n_tools, 1)
-        return ", ".join(rng.choice(TECH_TOOLS, size=n_tools, replace=False))
-
-    tech_stacks = [pick_tech_stack(e) for e in employee_count]
+    # Tech stack: vectorized — pick tool counts, then build strings
+    base_tools = 2 + np.log2(np.maximum(employee_count, 20)).astype(int)
+    n_tools_per = np.clip(rng.poisson(base_tools), 1, len(TECH_TOOLS))
+    tool_arr = np.array(TECH_TOOLS)
+    tech_stacks = []
+    for nt in n_tools_per:
+        tech_stacks.append(", ".join(rng.choice(tool_arr, size=nt, replace=False)))
 
     # Existing customers: ~18% overall, higher for Enterprise
     existing_probs = np.where(segment == "Enterprise", 0.30,
@@ -173,7 +173,7 @@ def generate_accounts(n: int = 1500, rng: np.random.Generator = None) -> pd.Data
     ).astype(int)
 
     accounts = pd.DataFrame({
-        "account_id": [f"ACC-{i:05d}" for i in range(1, n + 1)],
+        "account_id": [f"ACC-{i:06d}" for i in range(1, n + 1)],
         "company_name": [f"Company {i}" for i in range(1, n + 1)],
         "industry": rng.choice(INDUSTRIES, size=n, p=INDUSTRY_WEIGHTS),
         "employee_count": employee_count,
@@ -190,56 +190,80 @@ def generate_accounts(n: int = 1500, rng: np.random.Generator = None) -> pd.Data
 
 def generate_contacts(accounts: pd.DataFrame, avg_per_account: float = 6.5,
                       rng: np.random.Generator = None) -> pd.DataFrame:
-    """Generate synthetic contact data linked to accounts."""
+    """Generate synthetic contact data linked to accounts.
+
+    Vectorized implementation — generates all contacts at once instead of
+    iterating row-by-row over accounts. Handles 100K+ accounts efficiently.
+    """
     if rng is None:
         rng = np.random.default_rng(RANDOM_SEED + 1)
 
-    contacts = []
-    contact_id = 1
+    # Compute contact counts per account (vectorized)
+    segment_mult = accounts["segment"].map(
+        {"SMB": 0.6, "Mid-Market": 1.0, "Enterprise": 1.8}
+    ).values
+    lambdas = avg_per_account * segment_mult
+    n_contacts_per = np.maximum(2, rng.poisson(lambdas)).astype(int)
+    total = int(n_contacts_per.sum())
 
-    for _, acct in accounts.iterrows():
-        # More contacts for larger accounts
-        segment_multiplier = {"SMB": 0.6, "Mid-Market": 1.0, "Enterprise": 1.8}
-        n_contacts = max(2, int(rng.poisson(avg_per_account * segment_multiplier[acct["segment"]])))
+    # Expand account IDs and company names
+    acct_ids = np.repeat(accounts["account_id"].values, n_contacts_per)
+    company_names = np.repeat(accounts["company_name"].values, n_contacts_per)
 
-        for _ in range(n_contacts):
-            function = rng.choice(JOB_FUNCTIONS, p=FUNCTION_WEIGHTS)
-            seniority = rng.choice(SENIORITIES, p=SENIORITY_WEIGHTS)
+    # Generate all contact fields at once
+    functions = rng.choice(JOB_FUNCTIONS, size=total, p=FUNCTION_WEIGHTS)
+    seniorities = rng.choice(SENIORITIES, size=total, p=SENIORITY_WEIGHTS)
 
-            title_key = (function, seniority)
-            title = rng.choice(TITLES_BY_FUNCTION_SENIORITY[title_key])
+    # Title lookup (list comp over arrays — fast dict lookups)
+    titles = [
+        rng.choice(TITLES_BY_FUNCTION_SENIORITY[(f, s)])
+        for f, s in zip(functions, seniorities)
+    ]
 
-            first = rng.choice(FIRST_NAMES)
-            last = rng.choice(LAST_NAMES)
-            domain = acct["company_name"].lower().replace(" ", "") + ".com"
+    firsts = rng.choice(FIRST_NAMES, size=total)
+    lasts = rng.choice(LAST_NAMES, size=total)
 
-            created = pd.Timestamp("2024-01-01") + pd.Timedelta(
-                days=int(rng.integers(0, 790))
-            )
+    # Domains from company names
+    domains = np.array([
+        cn.lower().replace(" ", "") + ".com" for cn in company_names
+    ])
 
-            contacts.append({
-                "contact_id": f"CON-{contact_id:06d}",
-                "account_id": acct["account_id"],
-                "first_name": first,
-                "last_name": last,
-                "email": f"{first.lower()}.{last.lower()}@{domain}",
-                "job_title": title,
-                "job_function": function,
-                "seniority": seniority,
-                "department": function,
-                "lead_source": rng.choice(LEAD_SOURCES, p=LEAD_SOURCE_WEIGHTS),
-                "created_at": created,
-            })
-            contact_id += 1
+    # Build emails
+    emails = [
+        f"{f.lower()}.{l.lower()}@{d}"
+        for f, l, d in zip(firsts, lasts, domains)
+    ]
 
-    return pd.DataFrame(contacts)
+    # Dates and lead sources
+    created_days = rng.integers(0, 790, size=total)
+    created_dates = pd.Timestamp("2024-01-01") + pd.to_timedelta(created_days, unit="D")
+    sources = rng.choice(LEAD_SOURCES, size=total, p=LEAD_SOURCE_WEIGHTS)
+
+    contacts = pd.DataFrame({
+        "contact_id": [f"CON-{i:07d}" for i in range(1, total + 1)],
+        "account_id": acct_ids,
+        "first_name": firsts,
+        "last_name": lasts,
+        "email": emails,
+        "job_title": titles,
+        "job_function": functions,
+        "seniority": seniorities,
+        "department": functions,
+        "lead_source": sources,
+        "created_at": created_dates,
+    })
+
+    return contacts
 
 
 def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
-                           n_opps: int = 800,
+                           n_opps: int = 50_000,
                            rng: np.random.Generator = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Generate opportunities and the contact_opportunity bridge table.
+
+    Uses pre-indexed dict lookups instead of per-row DataFrame filters
+    to handle 50K+ opportunities across 100K+ accounts efficiently.
 
     Win probability is influenced by:
     - Account segment (Mid-Market slightly higher than Enterprise/SMB)
@@ -251,6 +275,31 @@ def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
     if rng is None:
         rng = np.random.default_rng(RANDOM_SEED + 2)
 
+    # --- Pre-index for O(1) lookups instead of O(n) DataFrame filters ---
+    acct_dict = {}
+    for _, row in accounts.iterrows():
+        acct_dict[row["account_id"]] = {
+            "segment": row["segment"],
+            "tech_stack": row["tech_stack"],
+            "industry": row["industry"],
+            "has_existing_product": row["has_existing_product"],
+        }
+
+    # Group contacts by account — store as lists of (contact_id, seniority, job_function)
+    contacts_by_acct = {}
+    for _, row in contacts.iterrows():
+        aid = row["account_id"]
+        if aid not in contacts_by_acct:
+            contacts_by_acct[aid] = []
+        contacts_by_acct[aid].append(
+            (row["contact_id"], row["seniority"], row["job_function"])
+        )
+
+    # Pre-parse tech stacks to sets
+    acct_tool_sets = {}
+    for aid, info in acct_dict.items():
+        acct_tool_sets[aid] = set(t.strip() for t in info["tech_stack"].split(","))
+
     # Pick accounts that have opportunities (not all accounts have deals)
     acct_ids = accounts["account_id"].values
     opp_account_ids = rng.choice(acct_ids, size=n_opps, replace=True)
@@ -258,72 +307,70 @@ def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
     opportunities = []
     bridge_rows = []
 
+    segment_bonus = {"SMB": -0.02, "Mid-Market": 0.04, "Enterprise": 0.00}
+    industry_bonus = {
+        "Technology": 0.03, "Financial Services": 0.02,
+        "Healthcare": 0.00, "Manufacturing": -0.02,
+        "Retail": -0.01, "Media": 0.01,
+        "Professional Services": 0.01, "Education": -0.03
+    }
+    amount_params = {
+        "SMB": (8.5, 0.8),
+        "Mid-Market": (9.5, 0.9),
+        "Enterprise": (11.0, 1.0),
+    }
+    cycle_params = {"SMB": (30, 10), "Mid-Market": (55, 15), "Enterprise": (90, 25)}
+    open_stages = np.array(["Discovery", "Evaluation", "Proposal", "Negotiation"])
+
     for i, acct_id in enumerate(opp_account_ids):
         opp_id = f"OPP-{i + 1:06d}"
-        acct = accounts[accounts["account_id"] == acct_id].iloc[0]
-        acct_contacts = contacts[contacts["account_id"] == acct_id]
+        acct = acct_dict[acct_id]
+        acct_contacts = contacts_by_acct.get(acct_id)
 
-        if len(acct_contacts) == 0:
+        if not acct_contacts:
             continue
 
         # --- Assign contacts to this opportunity ---
-        # Number of contacts on the deal: 1-6, weighted by account size
         max_contacts = min(len(acct_contacts), 6)
         n_deal_contacts = max(1, min(int(rng.poisson(2.5)), max_contacts))
-        deal_contact_indices = rng.choice(len(acct_contacts), size=n_deal_contacts, replace=False)
-        deal_contacts = acct_contacts.iloc[deal_contact_indices]
+        deal_indices = rng.choice(len(acct_contacts), size=n_deal_contacts, replace=False)
+        deal_contacts = [acct_contacts[j] for j in deal_indices]
 
-        # Assign roles
-        available_roles = list(DEAL_ROLES)
-        for _, contact in deal_contacts.iterrows():
-            role = rng.choice(available_roles)
-            bridge_rows.append({
-                "contact_id": contact["contact_id"],
-                "opportunity_id": opp_id,
-                "role": role,
-            })
+        # Assign roles and build bridge rows
+        for contact_id, _, _ in deal_contacts:
+            role = rng.choice(DEAL_ROLES)
+            bridge_rows.append((contact_id, opp_id, role))
 
         # --- Calculate win probability based on signals ---
-        base_win_prob = 0.10
+        seg = acct["segment"]
+        win_prob = 0.10 + segment_bonus.get(seg, 0)
 
-        # Signal 1: Account segment
-        segment_bonus = {"SMB": -0.02, "Mid-Market": 0.04, "Enterprise": 0.00}
-        win_prob = base_win_prob + segment_bonus.get(acct["segment"], 0)
-
-        # Signal 2: Tech stack (high-signal tools)
-        acct_tools = set(t.strip() for t in acct["tech_stack"].split(","))
-        high_signal_count = len(acct_tools & HIGH_SIGNAL_TOOLS)
+        # Tech stack
+        high_signal_count = len(acct_tool_sets[acct_id] & HIGH_SIGNAL_TOOLS)
         win_prob += high_signal_count * 0.02
 
-        # Signal 3: Seniority of contacts on the deal
-        seniorities_on_deal = set(deal_contacts["seniority"].values)
-        has_vp_plus = bool(seniorities_on_deal & {"C-Suite", "VP"})
-        if has_vp_plus:
+        # Seniority on deal
+        seniorities_on_deal = {s for _, s, _ in deal_contacts}
+        if seniorities_on_deal & {"C-Suite", "VP"}:
             win_prob += 0.10
 
-        # Signal 4: Number of contacts (buying group size)
+        # Buying group size
         if n_deal_contacts >= 3:
             win_prob += 0.07
         elif n_deal_contacts >= 2:
             win_prob += 0.02
 
-        # Signal 5: Technical + Business function mix
-        functions_on_deal = set(deal_contacts["job_function"].values)
+        # Technical + Business mix
+        functions_on_deal = {f for _, _, f in deal_contacts}
         has_technical = bool(functions_on_deal & TECHNICAL_FUNCTIONS)
         has_business = bool(functions_on_deal & BUSINESS_FUNCTIONS)
         if has_technical and has_business:
             win_prob += 0.06
 
-        # Signal 6: Industry
-        industry_bonus = {
-            "Technology": 0.03, "Financial Services": 0.02,
-            "Healthcare": 0.00, "Manufacturing": -0.02,
-            "Retail": -0.01, "Media": 0.01,
-            "Professional Services": 0.01, "Education": -0.03
-        }
+        # Industry
         win_prob += industry_bonus.get(acct["industry"], 0)
 
-        # Signal 7: Existing customer (upsell/cross-sell)
+        # Existing customer
         if acct["has_existing_product"]:
             win_prob += 0.05
 
@@ -331,18 +378,12 @@ def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
         win_prob = np.clip(win_prob, 0.03, 0.55)
         is_won = rng.random() < win_prob
 
-        # Deal amount varies by segment
-        amount_params = {
-            "SMB": (8.5, 0.8),        # ~$5K-$20K
-            "Mid-Market": (9.5, 0.9),  # ~$15K-$80K
-            "Enterprise": (11.0, 1.0), # ~$50K-$500K
-        }
-        mean, sigma = amount_params.get(acct["segment"], (9.0, 1.0))
+        # Deal amount
+        mean, sigma = amount_params.get(seg, (9.0, 1.0))
         amount = int(np.clip(rng.lognormal(mean, sigma), 2000, 600000))
 
         # Deal cycle days
-        cycle_params = {"SMB": (30, 10), "Mid-Market": (55, 15), "Enterprise": (90, 25)}
-        cycle_mean, cycle_std = cycle_params.get(acct["segment"], (55, 15))
+        cycle_mean, cycle_std = cycle_params.get(seg, (55, 15))
         deal_cycle = max(7, int(rng.normal(cycle_mean, cycle_std)))
 
         created_at = pd.Timestamp("2024-03-01") + pd.Timedelta(
@@ -356,12 +397,12 @@ def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
         elif pd.notna(closed_at):
             stage = "Closed Lost"
         else:
-            stage = rng.choice(["Discovery", "Evaluation", "Proposal", "Negotiation"])
+            stage = rng.choice(open_stages)
 
         opportunities.append({
             "opportunity_id": opp_id,
             "account_id": acct_id,
-            "primary_contact_id": deal_contacts.iloc[0]["contact_id"],
+            "primary_contact_id": deal_contacts[0][0],
             "stage": stage,
             "amount": amount,
             "created_at": created_at,
@@ -371,24 +412,25 @@ def generate_opportunities(accounts: pd.DataFrame, contacts: pd.DataFrame,
         })
 
     opp_df = pd.DataFrame(opportunities)
-    bridge_df = pd.DataFrame(bridge_rows)
+    bridge_df = pd.DataFrame(bridge_rows, columns=["contact_id", "opportunity_id", "role"])
 
     return opp_df, bridge_df
 
 
-def generate_all(output_dir: str = None) -> dict[str, pd.DataFrame]:
+def generate_all(output_dir: str = None, n_accounts: int = 100_000,
+                 n_opps: int = 50_000) -> dict[str, pd.DataFrame]:
     """Generate all tables and optionally save to CSV."""
     rng = np.random.default_rng(RANDOM_SEED)
 
-    print("Generating accounts...")
-    accounts = generate_accounts(n=1500, rng=rng)
+    print(f"Generating {n_accounts:,} accounts...")
+    accounts = generate_accounts(n=n_accounts, rng=rng)
 
     print("Generating contacts...")
     contacts = generate_contacts(accounts, rng=np.random.default_rng(RANDOM_SEED + 1))
 
-    print("Generating opportunities and contact roles...")
+    print(f"Generating {n_opps:,} opportunities and contact roles...")
     opportunities, contact_opportunity = generate_opportunities(
-        accounts, contacts, n_opps=800,
+        accounts, contacts, n_opps=n_opps,
         rng=np.random.default_rng(RANDOM_SEED + 2)
     )
 

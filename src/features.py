@@ -207,14 +207,67 @@ def _build_in_deal_contact_features(
     ).reset_index(name="role_coverage")
 
     acct_deal = acct_deal.merge(role_coverage, on="account_id", how="left")
+
+    # Seniority mix: has both VP+ AND Director/Manager level contacts
+    deal_seniorities = (
+        contact_opportunity
+        .merge(contacts[["contact_id", "seniority"]], on="contact_id")
+        .merge(opportunities[["opportunity_id", "account_id"]], on="opportunity_id")
+    )
+    seniority_mix = deal_seniorities.groupby("account_id")["seniority"].apply(
+        lambda s: set(s)
+    ).reset_index(name="seniority_set")
+    seniority_mix["has_vp_plus"] = seniority_mix["seniority_set"].apply(
+        lambda s: bool(s & {"C-Suite", "VP"})
+    )
+    seniority_mix["has_mid_level"] = seniority_mix["seniority_set"].apply(
+        lambda s: bool(s & {"Director", "Manager"})
+    )
+    seniority_mix["seniority_mix_score"] = (
+        seniority_mix["has_vp_plus"].astype(int) * 12.5
+        + seniority_mix["has_mid_level"].astype(int) * 12.5
+    )
+    acct_deal = acct_deal.merge(
+        seniority_mix[["account_id", "seniority_mix_score"]],
+        on="account_id", how="left"
+    )
+    acct_deal["seniority_mix_score"] = acct_deal["seniority_mix_score"].fillna(0)
+
+    # Technical + Business function mix
+    deal_functions = (
+        contact_opportunity
+        .merge(contacts[["contact_id", "job_function"]], on="contact_id")
+        .merge(opportunities[["opportunity_id", "account_id"]], on="opportunity_id")
+    )
+    func_mix = deal_functions.groupby("account_id")["job_function"].apply(
+        lambda f: set(f)
+    ).reset_index(name="function_set")
+    func_mix["has_technical"] = func_mix["function_set"].apply(
+        lambda f: bool(f & TECHNICAL_FUNCTIONS)
+    )
+    func_mix["has_business"] = func_mix["function_set"].apply(
+        lambda f: bool(f & BUSINESS_FUNCTIONS)
+    )
+    func_mix["tech_business_score"] = (
+        (func_mix["has_technical"] & func_mix["has_business"]).astype(int) * 25
+    )
+    acct_deal = acct_deal.merge(
+        func_mix[["account_id", "tech_business_score"]],
+        on="account_id", how="left"
+    )
+    acct_deal["tech_business_score"] = acct_deal["tech_business_score"].fillna(0)
+
+    # Function diversity: gradual scoring, capped at 25
+    acct_deal["function_diversity_score"] = np.minimum(
+        acct_deal["deal_function_diversity"] / 3 * 25, 25
+    )
+
+    # Buying group completeness (0-100): matches buying_groups.py formula
     acct_deal["buying_group_completeness"] = (
         acct_deal["role_coverage"] * 25
-        + acct_deal["deal_vp_plus"] * 25
-        + (acct_deal["deal_function_diversity"] >= 2).astype(int) * 25
-        + acct_deal.apply(
-            lambda row: 25 if row.get("has_champion", 0) and row.get("has_decision_maker", 0) else 0,
-            axis=1
-        )
+        + acct_deal["seniority_mix_score"]
+        + acct_deal["function_diversity_score"]
+        + acct_deal["tech_business_score"]
     )
 
     return acct_deal
