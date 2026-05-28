@@ -10,6 +10,7 @@ from src.model import (
     evaluate_model,
     get_feature_importance,
     bootstrap_ci,
+    train_baselines,
 )
 
 
@@ -106,6 +107,44 @@ class TestEvaluationCI:
         assert "auc_ci_upper" in eval_result["metrics"]
         assert eval_result["metrics"]["auc_ci_lower"] <= eval_result["metrics"]["auc"]
         assert eval_result["metrics"]["auc_ci_upper"] >= eval_result["metrics"]["auc"]
+
+
+class TestBaselines:
+    def test_returns_all_baselines(self, modeling_data):
+        X, y = modeling_data
+        if len(y.unique()) < 2:
+            pytest.skip("Need both classes in target")
+        result = train_baselines(X, y, X, y)
+        assert isinstance(result, pd.DataFrame)
+        assert set(result["model"]) == {
+            "Random",
+            "Senior density (rank only)",
+            "Segment only (LR)",
+            "Firmographic only (LR)",
+        }
+
+    def test_auc_columns_present_and_ordered(self, modeling_data):
+        X, y = modeling_data
+        if len(y.unique()) < 2:
+            pytest.skip("Need both classes in target")
+        result = train_baselines(X, y, X, y)
+        for col in ("auc", "auc_ci_lower", "auc_ci_upper", "n_features"):
+            assert col in result.columns
+        assert (result["auc_ci_lower"] <= result["auc"]).all()
+        assert (result["auc"] <= result["auc_ci_upper"]).all()
+
+    def test_firmographic_excludes_contact_features(self, modeling_data):
+        X, y = modeling_data
+        if len(y.unique()) < 2:
+            pytest.skip("Need both classes in target")
+        result = train_baselines(X, y, X, y)
+        firmo = result.loc[result["model"] == "Firmographic only (LR)", "n_features"].iloc[0]
+        # Firmographic baseline must drop the contact-composition columns
+        # that exist in the feature matrix.
+        from src.model import CONTACT_COMPOSITION_COLS
+        n_contact_in_X = sum(c in X.columns for c in CONTACT_COMPOSITION_COLS)
+        assert n_contact_in_X > 0
+        assert firmo == X.shape[1] - n_contact_in_X
 
 
 class TestFeatureImportance:

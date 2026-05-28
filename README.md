@@ -21,9 +21,29 @@ This project builds both layers and combines them into a targeting framework tha
 | Precision @ Top 10% | 44.8% (95% CI: 0.41–0.48) |
 | Top-Decile Lift | 1.3x |
 
+All confidence intervals are bootstrap estimates: 1,000 resamples of the held-out test set, reported as the 2.5th and 97.5th percentiles of the metric across resamples.
+
 Trained on ~36K accounts with closed deals (out of 100K total). The model uses pre-deal features only — firmographic/technographic signals and contact composition metrics. In-deal buying group features (from the contact-opportunity bridge) are excluded to avoid target leakage, since they are derived from the same opportunities whose outcome is the target. Top drivers include senior contact density, existing customer status, complementary tech stack, and segment.
 
 AUC of ~0.58 on pre-deal features is realistic for production B2B propensity models — firmographic and contact signals are noisy in isolation. The value comes from concentrating wins in top deciles for more efficient resource allocation across 100K accounts. Random forest was tested as a benchmark (AUC 0.567) but showed no improvement over logistic regression, so LR was selected for its interpretable coefficients that translate directly to scoring rules in marketing stacks like Marketo and HubSpot.
+
+#### Does the model earn its complexity?
+
+A reported AUC only means something against a floor. The full 39-feature model was compared to four naive baselines on the same held-out test set, each isolating a progressively richer signal:
+
+| Model | Features | Test AUC | 95% CI |
+|-------|----------|----------|--------|
+| Random | 0 | 0.494 | 0.480–0.507 |
+| Senior density (rank only) | 1 | 0.548 | 0.535–0.562 |
+| Segment only | 3 | 0.529 | 0.517–0.541 |
+| Firmographic only | 30 | 0.562 | 0.549–0.575 |
+| Full model | 39 | 0.575 | 0.561–0.589 |
+
+A single feature, senior contact density, gets to AUC 0.548, about half the gap from random to the full model. Firmographic and technographic features alone reach 0.562. The contact-composition features lift AUC to 0.575, but the confidence intervals overlap (firmographic-only 0.549–0.575 vs full 0.561–0.589), so that lift is small and not cleanly distinguishable on this data. The honest read: most of the pre-deal propensity signal is firmographic, and the contact-composition features add marginal lift at the account level. The stronger signal from who is on the deal shows up in the buying group analysis below, where in-deal features are used descriptively rather than for prediction.
+
+#### Calibration
+
+AUC measures ranking; it says nothing about whether a predicted 40% actually means 40%. On the test set the predicted probabilities track observed win rates closely: across score deciles the largest gap between predicted and actual win rate is 2.4 percentage points, and the Brier score is 0.226 versus 0.230 for a no-skill model that always predicts the base rate. So the scores are weak at separating winners from losers but trustworthy as probabilities, which is what matters if marketing sets a threshold on them. The reliability plot is in notebook 03.
 
 ### Buying Group Analysis
 
@@ -34,7 +54,7 @@ AUC of ~0.58 on pre-deal features is realistic for production B2B propensity mod
 | Medium (25-50) | 28% | 11,029 |
 | Low (0-25) | 22% | 5,121 |
 
-Accounts with complete buying groups win at **2.2x the rate** of those with low completeness. The gap analysis identified 29,512 accounts with specific coverage gaps (missing roles, seniority, or function diversity). The 2×2 targeting framework (propensity × completeness) identifies 7,068 high-propensity accounts with incomplete buying groups as the highest-ROI enrichment targets — accounts the model predicts are likely to buy, but that need the right people at the table.
+Accounts with complete buying groups win at **2.2x the rate** of those with low completeness. This is an association, not a causal estimate: complete buying groups tend to co-occur with larger, more engaged, later-stage accounts that were more likely to win regardless, so the raw 2.2x overstates the lift a team would get purely from filling gaps. Isolating the causal effect would need a controlled test (randomized enrichment) or, short of that, adjustment for account size, segment, and deal stage. The gap analysis identified 29,512 accounts with specific coverage gaps (missing roles, seniority, or function diversity). The 2×2 targeting framework (propensity × completeness) identifies 7,068 high-propensity accounts with incomplete buying groups as the highest-ROI enrichment targets — accounts the model predicts are likely to buy, but that need the right people at the table.
 
 ### Synthetic Data Limitations
 

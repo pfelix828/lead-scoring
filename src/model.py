@@ -78,6 +78,87 @@ def train_random_forest(X_train, y_train, cv: int = 5) -> dict:
     }
 
 
+# Contact-composition features: everything derived from the contacts table
+# (not firmographic/technographic). Used to isolate the firmographic-only
+# baseline from the full feature set.
+CONTACT_COMPOSITION_COLS = [
+    "contact_count", "vp_plus_count", "director_plus_count",
+    "function_diversity", "has_technical", "has_business",
+    "max_seniority", "has_technical_and_business", "senior_density",
+]
+
+
+def train_baselines(X_train, y_train, X_test, y_test) -> pd.DataFrame:
+    """
+    Establish naive performance floors to test whether the full feature set
+    earns its complexity.
+
+    Each baseline isolates a progressively richer signal so the comparison
+    answers a specific question:
+      - random            — definitional AUC 0.5 (sanity floor)
+      - senior_density    — rank by a single contact signal, no model fit.
+                            "Could a marketing analyst do this with one
+                            ORDER BY in SQL?"
+      - segment_only      — logistic regression on segment one-hots only.
+                            "Do we need anything beyond company size tier?"
+      - firmographic_only — logistic regression on firmographic/technographic
+                            features only (no contact-composition features).
+                            "Do the contact features add lift?"
+
+    All AUCs are on the held-out test set with bootstrap 95% CIs, computed
+    the same way as evaluate_model so the numbers are directly comparable.
+
+    Returns a DataFrame: model, n_features, auc, auc_ci_lower, auc_ci_upper.
+    """
+    rows = []
+
+    # Random: scores drawn independently of the label.
+    rng = np.random.default_rng(42)
+    random_scores = rng.random(len(y_test))
+    random_ci = bootstrap_ci(y_test, random_scores, roc_auc_score)
+    rows.append({"model": "Random", "n_features": 0, **_ci_row(random_ci)})
+
+    # Single feature, no model: rank accounts by senior contact density.
+    sd_scores = X_test["senior_density"].to_numpy()
+    sd_ci = bootstrap_ci(y_test, sd_scores, roc_auc_score)
+    rows.append({"model": "Senior density (rank only)", "n_features": 1,
+                 **_ci_row(sd_ci)})
+
+    # Segment-only logistic regression.
+    seg_cols = [c for c in X_train.columns if c.startswith("seg_")]
+    seg_ci = _fit_subset_auc(X_train, y_train, X_test, y_test, seg_cols)
+    rows.append({"model": "Segment only (LR)", "n_features": len(seg_cols),
+                 **_ci_row(seg_ci)})
+
+    # Firmographic/technographic only (drop contact-composition features).
+    firmo_cols = [c for c in X_train.columns if c not in CONTACT_COMPOSITION_COLS]
+    firmo_ci = _fit_subset_auc(X_train, y_train, X_test, y_test, firmo_cols)
+    rows.append({"model": "Firmographic only (LR)", "n_features": len(firmo_cols),
+                 **_ci_row(firmo_ci)})
+
+    return pd.DataFrame(rows)
+
+
+def _fit_subset_auc(X_train, y_train, X_test, y_test, cols: list) -> dict:
+    """Fit a scaled logistic regression on a column subset, return AUC + CI."""
+    pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", LogisticRegression(max_iter=1000, C=0.01, random_state=42)),
+    ])
+    pipeline.fit(X_train[cols], y_train)
+    scores = pipeline.predict_proba(X_test[cols])[:, 1]
+    return bootstrap_ci(y_test, scores, roc_auc_score)
+
+
+def _ci_row(ci: dict) -> dict:
+    """Flatten a bootstrap_ci dict into auc / lower / upper columns."""
+    return {
+        "auc": ci["point"],
+        "auc_ci_lower": ci["lower"],
+        "auc_ci_upper": ci["upper"],
+    }
+
+
 def bootstrap_ci(y_true, y_scores, metric_fn, n_bootstrap=1000, ci=0.95):
     """
     Compute bootstrap confidence intervals for a metric.
