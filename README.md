@@ -1,5 +1,7 @@
 # Lead Scoring & Buying Group Identification
 
+**Live demo: [lead-scoring.streamlit.app](https://lead-scoring.streamlit.app)**
+
 A propensity model and buying group framework for B2B SaaS marketing, built on synthetic data that mirrors real GTM workflows.
 
 ## The Problem
