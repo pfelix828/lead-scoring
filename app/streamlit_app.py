@@ -5,6 +5,7 @@ Interactive exploration of propensity scores and buying group coverage gaps.
 Runs entirely on local synthetic data — no APIs required.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -16,16 +17,9 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import train_test_split
 
 from src.generate_data import generate_all
-from src.features import get_modeling_dataset, build_account_features
-from src.model import train_logistic_regression, get_feature_importance
-from src.buying_groups import (
-    score_buying_group_completeness,
-    identify_coverage_gaps,
-    estimate_enrichment_pipeline,
-)
+from src.scored_dataset import build_scored_artifacts
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -40,10 +34,42 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Data loading & model training (cached)
 # ---------------------------------------------------------------------------
+DATA_DIR = Path(__file__).parent.parent / "data"
+ARTIFACT_FILES = ["scored.parquet", "importance.parquet", "lift_by_decile.parquet", "model_eval.json"]
+
+
+@st.cache_data
+def load_precomputed_artifacts():
+    """Load the committed dashboard artifacts (see scripts/precompute_scored.py).
+
+    The full pipeline — feature engineering over 717K contacts plus training —
+    peaks above 1GB, more than Streamlit Cloud's guaranteed 690MB. These four
+    small files are the same pipeline's output on the same seed-42 data, so
+    every number matches a live run. Returns None when the files are absent.
+    """
+    if not all((DATA_DIR / f).exists() for f in ARTIFACT_FILES):
+        return None
+
+    scored = pd.read_parquet(DATA_DIR / "scored.parquet")
+    importance = pd.read_parquet(DATA_DIR / "importance.parquet")
+    metrics = json.loads((DATA_DIR / "model_eval.json").read_text())
+    cv_auc = metrics.pop("cv_auc")
+    metrics["lift_by_decile"] = pd.read_parquet(DATA_DIR / "lift_by_decile.parquet")
+    return scored, importance, {"metrics": metrics}, cv_auc
+
+
 @st.cache_data
 def load_data():
-    # Generate data in-memory (works both locally and on Streamlit Cloud
-    # where the gitignored CSVs don't exist)
+    # Prefer the committed parquet snapshot of the seed-42 dataset; fall back
+    # to in-memory generation for local runs without the files.
+    if (DATA_DIR / "accounts.parquet").exists():
+        return {
+            "accounts": pd.read_parquet(DATA_DIR / "accounts.parquet"),
+            "contacts": pd.read_parquet(DATA_DIR / "contacts.parquet"),
+            "opportunities": pd.read_parquet(DATA_DIR / "opportunities.parquet"),
+            "contact_opp": pd.read_parquet(DATA_DIR / "contact_opportunity.parquet"),
+        }
+
     tables = generate_all()
     return {
         "accounts": tables["accounts"],
@@ -55,62 +81,18 @@ def load_data():
 
 @st.cache_data
 def build_scored_dataset(_data):
-    accounts = _data["accounts"]
-    contacts = _data["contacts"]
-    opportunities = _data["opportunities"]
-    contact_opp = _data["contact_opp"]
-
-    # Build features and train model
-    X, y = get_modeling_dataset(accounts, contacts, opportunities, contact_opp)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
-    lr = train_logistic_regression(X_train, y_train, cv=5)
-
-    # Score all accounts and track train/test membership
-    scores = lr["model"].predict_proba(X)[:, 1]
-    in_test_set = pd.Series(False, index=X.index)
-    in_test_set.loc[X_test.index] = True
-
-    # Rebuild with account IDs
-    acct_feat = build_account_features(accounts, contacts, opportunities, contact_opp)
-    closed = opportunities[opportunities["stage"].isin(["Closed Won", "Closed Lost"])]
-    acct_target = closed.groupby("account_id")["is_won"].max().reset_index()
-    acct_target.columns = ["account_id", "target"]
-    dataset = acct_feat.merge(acct_target, on="account_id", how="inner")
-    dataset["propensity_score"] = scores
-    dataset["in_test_set"] = in_test_set.values
-
-    # Buying group completeness
-    completeness = score_buying_group_completeness(
-        accounts, contacts, contact_opp, opportunities
-    )
-
-    # Merge everything
-    result = dataset[["account_id", "propensity_score", "target", "in_test_set"]].merge(
-        completeness, on="account_id", how="inner"
-    ).merge(
-        accounts[["account_id", "company_name", "segment", "industry",
-                  "employee_count", "annual_revenue", "region", "tech_stack",
-                  "has_existing_product", "arr"]],
-        on="account_id", how="left"
-    )
-
-    # Feature importance
-    importance = get_feature_importance(lr["model"], list(X.columns))
-
-    # Model metrics
-    from src.model import evaluate_model
-    eval_result = evaluate_model(lr["model"], X_test, y_test)
-
-    return result, importance, eval_result, lr["cv_auc"]
+    return build_scored_artifacts(_data)
 
 
 # ---------------------------------------------------------------------------
 # Load everything
 # ---------------------------------------------------------------------------
-data = load_data()
-scored, importance, eval_result, cv_auc = build_scored_dataset(data)
+_artifacts = load_precomputed_artifacts()
+if _artifacts is not None:
+    scored, importance, eval_result, cv_auc = _artifacts
+else:
+    data = load_data()
+    scored, importance, eval_result, cv_auc = build_scored_dataset(data)
 
 # ---------------------------------------------------------------------------
 # Sidebar filters
