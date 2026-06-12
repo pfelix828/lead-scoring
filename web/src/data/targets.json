@@ -1,0 +1,429 @@
+{
+ "summary": {
+  "gap_pool_n": 29512,
+  "n_targets": 7070,
+  "avg_propensity": 0.409,
+  "avg_completeness": 28.1,
+  "median_propensity_threshold": 0.3576,
+  "missing_roles": [
+   {
+    "role": "Influencer",
+    "n": 5090
+   },
+   {
+    "role": "Evaluator",
+    "n": 5089
+   },
+   {
+    "role": "Champion",
+    "n": 5077
+   },
+   {
+    "role": "Decision Maker",
+    "n": 5011
+   }
+  ],
+  "structural": [
+   {
+    "gap": "No VP+ contact",
+    "n": 5214
+   },
+   {
+    "gap": "No technical contact",
+    "n": 3850
+   },
+   {
+    "gap": "No business contact",
+    "n": 3617
+   }
+  ]
+ },
+ "rows": [
+  {
+   "company": "Company 2463",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.609,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 57692",
+   "segment": "Mid-Market",
+   "industry": "Healthcare",
+   "propensity": 0.608,
+   "completeness": 35.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 19682",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.592,
+   "completeness": 33.0,
+   "missing": [
+    "Champion",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 82549",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.577,
+   "completeness": 27.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 55944",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.571,
+   "completeness": 15.0,
+   "missing": [
+    "Champion",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 67162",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.57,
+   "completeness": 48.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 46678",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.57,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 58209",
+   "segment": "Mid-Market",
+   "industry": "Healthcare",
+   "propensity": 0.569,
+   "completeness": 42.0,
+   "missing": [
+    "Champion",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 21203",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.564,
+   "completeness": 27.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 16112",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.564,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 20717",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.562,
+   "completeness": 42.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 3930",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.557,
+   "completeness": 27.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 17757",
+   "segment": "Mid-Market",
+   "industry": "Healthcare",
+   "propensity": 0.557,
+   "completeness": 33.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 43567",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.555,
+   "completeness": 27.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 59390",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.553,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 27719",
+   "segment": "Mid-Market",
+   "industry": "Media",
+   "propensity": 0.552,
+   "completeness": 15.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 115",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.551,
+   "completeness": 33.0,
+   "missing": [
+    "Champion",
+    "Decision Maker"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 31749",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.548,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 61901",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.546,
+   "completeness": 15.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 73947",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.546,
+   "completeness": 42.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 36617",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.545,
+   "completeness": 15.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 44401",
+   "segment": "Mid-Market",
+   "industry": "Media",
+   "propensity": 0.544,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 15147",
+   "segment": "Mid-Market",
+   "industry": "Manufacturing",
+   "propensity": 0.544,
+   "completeness": 8.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 53272",
+   "segment": "Mid-Market",
+   "industry": "Media",
+   "propensity": 0.542,
+   "completeness": 48.0,
+   "missing": [
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 22220",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.541,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 20219",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.54,
+   "completeness": 15.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 58343",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.54,
+   "completeness": 8.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": false
+  },
+  {
+   "company": "Company 55551",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.54,
+   "completeness": 46.0,
+   "missing": [
+    "Evaluator",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 73532",
+   "segment": "Mid-Market",
+   "industry": "Technology",
+   "propensity": 0.539,
+   "completeness": 33.0,
+   "missing": [
+    "Decision Maker",
+    "Influencer"
+   ],
+   "has_vp": true
+  },
+  {
+   "company": "Company 95198",
+   "segment": "Mid-Market",
+   "industry": "Financial Services",
+   "propensity": 0.539,
+   "completeness": 27.0,
+   "missing": [
+    "Champion",
+    "Decision Maker",
+    "Influencer"
+   ],
+   "has_vp": false
+  }
+ ]
+}

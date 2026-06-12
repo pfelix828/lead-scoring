@@ -1,6 +1,6 @@
 # Lead Scoring & Buying Group Identification
 
-**Live demo: [pfelix-lead-scoring.streamlit.app](https://pfelix-lead-scoring.streamlit.app)**
+**Live demo: [pfelix-lead-scoring.vercel.app](https://pfelix-lead-scoring.vercel.app)**
 
 A propensity model and buying group framework for B2B SaaS marketing, built on synthetic data that mirrors real GTM workflows.
 
@@ -45,7 +45,7 @@ A single feature, senior contact density, gets to AUC 0.548, about half the gap 
 
 #### Calibration
 
-AUC measures ranking; it says nothing about whether a predicted 40% actually means 40%. On the test set the predicted probabilities track observed win rates closely: across score deciles the largest gap between predicted and actual win rate is 2.4 percentage points, and the Brier score is 0.226 versus 0.230 for a no-skill model that always predicts the base rate. So the scores are weak at separating winners from losers but trustworthy as probabilities, which is what matters if marketing sets a threshold on them. The reliability plot is in notebook 03.
+AUC measures ranking; it says nothing about whether a predicted 40% actually means 40%. On the test set the predicted probabilities track observed win rates closely: across score deciles the largest gap between predicted and actual win rate is 2.5 percentage points, and the Brier score is 0.226 versus 0.230 for a no-skill model that always predicts the base rate. So the scores are weak at separating winners from losers but trustworthy as probabilities, which is what matters if marketing sets a threshold on them. The reliability plot is in notebook 03.
 
 ### Buying Group Analysis
 
@@ -56,7 +56,7 @@ AUC measures ranking; it says nothing about whether a predicted 40% actually mea
 | Medium (25-50) | 28% | 11,029 |
 | Low (0-25) | 22% | 5,121 |
 
-Accounts with complete buying groups win at **2.2x the rate** of those with low completeness. This is an association, not a causal estimate: complete buying groups tend to co-occur with larger, more engaged, later-stage accounts that were more likely to win regardless, so the raw 2.2x overstates the lift a team would get purely from filling gaps. Isolating the causal effect would need a controlled test (randomized enrichment) or, short of that, adjustment for account size, segment, and deal stage. The gap analysis identified 29,512 accounts with specific coverage gaps (missing roles, seniority, or function diversity). The 2×2 targeting framework (propensity × completeness) identifies 7,068 high-propensity accounts with incomplete buying groups as the highest-ROI enrichment targets — accounts the model predicts are likely to buy, but that need the right people at the table.
+Accounts with complete buying groups win at **2.2x the rate** of those with low completeness. This is an association, not a causal estimate: complete buying groups tend to co-occur with larger, more engaged, later-stage accounts that were more likely to win regardless, so the raw 2.2x overstates the lift a team would get purely from filling gaps. Isolating the causal effect would need a controlled test (randomized enrichment) or, short of that, adjustment for account size, segment, and deal stage. The gap analysis identified 29,512 accounts with specific coverage gaps (missing roles, seniority, or function diversity). The 2×2 targeting framework (propensity × completeness) identifies 7,070 high-propensity accounts with incomplete buying groups as the highest-ROI enrichment targets — accounts the model predicts are likely to buy, but that need the right people at the table.
 
 ### Synthetic Data Limitations
 
